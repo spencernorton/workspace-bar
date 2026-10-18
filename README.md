@@ -6,15 +6,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/spencercnorton/norvi-os"><img alt="Part of NorviOS" src="https://img.shields.io/badge/NorviOS-component-FD8024.svg"></a>
-  <a href="https://github.com/spencercnorton/workspace-bar/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/spencercnorton/workspace-bar/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/spencercnorton/workspace-bar/tags"><img alt="Latest release" src="https://img.shields.io/github/v/tag/spencercnorton/workspace-bar?label=release&sort=semver"></a>
+  <a href="https://github.com/spencernorton/norvi-os"><img alt="Part of NorviOS" src="https://img.shields.io/badge/NorviOS-component-FD8024.svg"></a>
+  <a href="https://github.com/spencernorton/workspace-bar/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/spencernorton/workspace-bar/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/spencernorton/workspace-bar/tags"><img alt="Latest release" src="https://img.shields.io/github/v/tag/spencercnorton/workspace-bar?label=release&sort=semver"></a>
   <a href="#install"><img alt="Install for GNOME Shell" src="https://img.shields.io/badge/install-GNOME%20Shell-4a86cf.svg"></a>
   <a href="LICENSE"><img alt="Licence" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-blue.svg"></a>
   <a href="https://buy.stripe.com/8x26oH2U44f65TRe574wM04"><img alt="Donate" src="https://img.shields.io/badge/donate-Stripe-635bff.svg?logo=stripe&logoColor=white"></a>
 </p>
 
-GNOME Shell shows your workspaces as dots inside the Activities button. This extension shows them as buttons with their names instead, such as Home, Code and Media, so you can see where you are and go straight to where you want to be. It is part of the [NorviOS](https://github.com/spencercnorton/norvi-os) desktop and supports GNOME Shell 50.
+GNOME Shell shows your workspaces as dots inside the Activities button. This extension shows them as buttons with their names instead, such as Home, Code and Media, so you can see where you are and go straight to where you want to be. It is part of the [NorviOS](https://github.com/spencernorton/norvi-os) desktop and supports GNOME Shell 50.
 
 <p align="center">
   <img alt="The left end of the GNOME top bar: four workspace buttons, Home, Code, Media and Game. Home is the active one, a dark pill in the accent colour; Code has windows on it and is bright; Media and Game are empty and dimmed." src="docs/screenshots/top-bar.png" width="275">
@@ -38,7 +38,7 @@ The bar takes the place of the Activities button. The overview still opens with 
 
 ### GNOME Shell — the release zip
 
-Download `workspace-bar.shell-extension.zip` and `SHA256SUMS.txt` from the [latest release](https://github.com/spencercnorton/workspace-bar/releases/latest), then:
+Download `workspace-bar.shell-extension.zip` and `SHA256SUMS.txt` from the [latest release](https://github.com/spencernorton/workspace-bar/releases/latest), then:
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS.txt
@@ -72,8 +72,8 @@ The extension has no settings of its own and stores nothing else. It reads the a
 
 ## Contributing and support
 
-- Bugs and feature requests: [open an issue](https://github.com/spencercnorton/workspace-bar/issues/new/choose). Questions: [Discussions](https://github.com/spencercnorton/workspace-bar/discussions).
-- Security reports: [private vulnerability reporting](https://github.com/spencercnorton/workspace-bar/security/advisories/new). See [SECURITY.md](SECURITY.md). There is no e-mail address; that is deliberate.
+- Bugs and feature requests: [open an issue](https://github.com/spencernorton/workspace-bar/issues/new/choose). Questions: [Discussions](https://github.com/spencernorton/workspace-bar/discussions).
+- Security reports: [private vulnerability reporting](https://github.com/spencernorton/workspace-bar/security/advisories/new). See [SECURITY.md](SECURITY.md). There is no e-mail address; that is deliberate.
 - Pull requests are welcome; read [CONTRIBUTING.md](CONTRIBUTING.md) first. Changes are reviewed and merged on GitHub, then shipped in tagged releases.
 - If this saves you time, you can [support its development](https://buy.stripe.com/8x26oH2U44f65TRe574wM04).
 
