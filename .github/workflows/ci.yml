@@ -51,9 +51,24 @@ jobs:
           mkdir -p dist/deb dist/zip
           cp /tmp/one/*.deb dist/deb/
           cp /tmp/one/*.zip dist/zip/
-          (cd dist/deb && sha256sum *.deb > SHA256SUMS.txt)
+          (cd dist/deb && sha256sum -- *.deb > SHA256SUMS.txt)
       - name: Lintian
         run: lintian --fail-on error,warning dist/deb/*.deb
+      - name: GNOME Shell runtime dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends gnome-shell gnome-shell-common \
+            dbus dbus-bin dbus-daemon libgl1-mesa-dri libegl-mesa0 \
+            gsettings-desktop-schemas xwayland at-spi2-core
+      - name: Load the packaged extension and exercise it in GNOME Shell 50
+        shell: bash
+        run: |
+          shellcheck tests/shell/runtime.sh
+          rm -rf /run/systemd/seats
+          mkdir -p /run/dbus
+          dbus-daemon --system --fork
+          useradd --create-home runtime-tester
+          runuser -u runtime-tester -- tests/shell/runtime.sh dist/zip/*.zip 2>&1 | tee shell-runtime.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: gnome-shell-extension-workspace-bar-debian-candidate
@@ -65,4 +80,10 @@ jobs:
           name: extension-zip
           path: dist/zip/
           if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: gnome-shell-runtime-evidence
+          path: shell-runtime.log
           retention-days: 14
