@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/spencernorton/norvi-os"><img alt="Part of NorviOS" src="https://img.shields.io/badge/NorviOS-component-FD8024.svg"></a>
   <a href="https://github.com/spencernorton/workspace-bar/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/spencernorton/workspace-bar/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/spencernorton/workspace-bar/tags"><img alt="Latest release" src="https://img.shields.io/github/v/tag/spencercnorton/workspace-bar?label=release&sort=semver"></a>
+  <a href="https://github.com/spencernorton/workspace-bar/tags"><img alt="Latest release" src="https://img.shields.io/github/v/tag/spencernorton/workspace-bar?label=release&sort=semver"></a>
   <a href="#install"><img alt="Install for GNOME Shell" src="https://img.shields.io/badge/install-GNOME%20Shell-4a86cf.svg"></a>
   <a href="LICENSE"><img alt="Licence" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-blue.svg"></a>
   <a href="https://buy.stripe.com/8x26oH2U44f65TRe574wM04"><img alt="Donate" src="https://img.shields.io/badge/donate-Stripe-635bff.svg?logo=stripe&logoColor=white"></a>
@@ -16,9 +16,9 @@
 
 GNOME Shell shows your workspaces as dots inside the Activities button. This extension shows them as buttons with their names instead, such as Home, Code and Media, so you can see where you are and go straight to where you want to be. It is part of the [NorviOS](https://github.com/spencernorton/norvi-os) desktop and supports GNOME Shell 50.
 
-<p align="center">
-  <img alt="The left end of the GNOME top bar: four workspace buttons, Home, Code, Media and Game. Home is the active one, a dark pill in the accent colour; Code has windows on it and is bright; Media and Game are empty and dimmed." src="docs/screenshots/top-bar.png" width="275">
-</p>
+<p align="center"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/demos/workspace-switching-still.png"><img src="docs/demos/workspace-switching.gif" alt="Switch between Home, Code and Media using named workspace buttons in the top bar." width="900"></picture></p>
+
+Actual GNOME workspaces and invented notes in an isolated session. [Recording source and still image](docs/demos/README.md).
 
 ## What it does
 
