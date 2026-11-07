@@ -6,10 +6,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/spencernorton/norvi-os"><img alt="Part of NorviOS" src="https://img.shields.io/badge/NorviOS-component-FD8024.svg"></a>
+  <a href="https://norvitech.com/norvi-os/"><img alt="Part of NorviOS" src="https://img.shields.io/badge/NorviOS-component-FD8024.svg"></a>
   <a href="https://github.com/spencernorton/workspace-bar/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/spencernorton/workspace-bar/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/spencernorton/workspace-bar/tags"><img alt="Latest release" src="https://img.shields.io/github/v/tag/spencernorton/workspace-bar?label=release&sort=semver"></a>
-  <a href="#install"><img alt="Install for GNOME Shell" src="https://img.shields.io/badge/install-GNOME%20Shell-4a86cf.svg"></a>
+  <a href="https://github.com/spencernorton/workspace-bar/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/spencernorton/workspace-bar?label=release"></a>
+  <a href="https://norvitech.com/#install"><img alt="APT repository" src="https://img.shields.io/badge/apt-Ubuntu%2026.04-e95420.svg?logo=ubuntu&logoColor=white"></a>
   <a href="LICENSE"><img alt="Licence" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-blue.svg"></a>
   <a href="https://buy.stripe.com/8x26oH2U44f65TRe574wM04"><img alt="Donate" src="https://img.shields.io/badge/donate-Stripe-635bff.svg?logo=stripe&logoColor=white"></a>
 </p>
@@ -35,6 +35,21 @@ Actual GNOME workspaces and invented notes in an isolated session. [Recording so
 The bar takes the place of the Activities button. The overview still opens with the Super key or the hot corner, and disabling the extension brings the Activities button back.
 
 ## Install
+
+### Ubuntu 26.04 — from the APT repository
+
+Use the [NorviTech APT repository](https://norvitech.com/#install) for automatic updates:
+
+```bash
+curl -fsSL https://apt.norvitech.com/setup.sh | sudo sh
+sudo apt install gnome-shell-extension-workspace-bar
+```
+
+Log out and back in, then enable the extension:
+
+```bash
+gnome-extensions enable workspace-bar@spencercnorton.github.io
+```
 
 ### GNOME Shell — the release zip
 
