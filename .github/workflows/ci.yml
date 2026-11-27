@@ -59,7 +59,7 @@ jobs:
           apt-get update -qq
           apt-get install -y -qq --no-install-recommends gnome-shell gnome-shell-common \
             dbus dbus-bin dbus-daemon libgl1-mesa-dri libegl-mesa0 \
-            gsettings-desktop-schemas xwayland at-spi2-core
+            gsettings-desktop-schemas xwayland at-spi2-core yaru-theme-gnome-shell
       - name: Load the packaged extension and exercise it in GNOME Shell 50
         shell: bash
         run: |
@@ -68,7 +68,9 @@ jobs:
           mkdir -p /run/dbus
           dbus-daemon --system --fork
           useradd --create-home runtime-tester
-          runuser -u runtime-tester -- tests/shell/runtime.sh dist/zip/*.zip 2>&1 | tee shell-runtime.log
+          for mode in user ubuntu; do
+            runuser -u runtime-tester -- tests/shell/runtime.sh dist/zip/*.zip "$mode" 2>&1 | tee -a shell-runtime.log
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: gnome-shell-extension-workspace-bar-debian-candidate

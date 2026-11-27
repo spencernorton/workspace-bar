@@ -37,24 +37,56 @@ export default class RuntimeProbe extends Extension {
         const uuid = GLib.getenv('RUNTIME_EXTENSION_UUID');
         const manager = Main.extensionManager;
         const extension = () => manager.lookup(uuid);
-        const state = async expected => {
+        const state = async (expected, target = uuid) => {
             for (let i = 0; i < 50; i++) {
-                if (extension()?.state === expected)
+                const current = manager.lookup(target);
+                if (current?.state === expected)
                     return;
                 // loadExtension uses ERROR provisionally while awaiting its
                 // module import. A nonempty error is an actual load failure.
-                if (extension()?.state === 3 && extension()?.error)
-                    throw new Error(`Extension failed: ${extension().error}`);
+                if (current?.state === 3 && current?.error)
+                    throw new Error(`Extension failed: ${current.error}`);
                 await wait(100);
             }
-            throw new Error(`Extension state ${extension()?.state}, expected ${expected}: ${extension()?.error}`);
+            throw new Error(`${target} state ${manager.lookup(target)?.state}, expected ${expected}`);
         };
-        await state(1);
+        const trigger = 'reload-trigger@extensions.test';
+        const gateId = 'reload-gate@extensions.test';
+        const activitiesWasVisible = Main.panel.statusArea.activities?.visible;
+        for (const target of [trigger, gateId, uuid]) {
+            manager.enableExtension(target);
+            await state(1, target);
+        }
         Main.overview.hide();
         await exercise(extension().stateObj, {wait, expect, phase: 'initial'});
-        manager.disableExtension(uuid);
-        await state(2);
-        await disabled({wait, expect});
+        expect(Main.sessionMode.currentMode === GLib.getenv('RUNTIME_SHELL_MODE'), 'Unexpected GNOME Shell session mode');
+        if (Main.sessionMode.currentMode === 'ubuntu')
+            expect(Main.layoutManager.monitors.length === 2, 'Expected two Ubuntu session monitors');
+        // Shell temporarily disables later extensions and awaits each peer's
+        // re-enable. Disable Workspace Bar from settings during that interval.
+        const gate = manager.lookup(gateId).stateObj;
+        let resumed;
+        let waiting = false;
+        gate.onEnable = () => new Promise(resolve => {
+            resumed = resolve;
+            waiting = true;
+        });
+        try {
+            manager.disableExtension(trigger);
+            for (let i = 0; i < 50 && !waiting; i++)
+                await wait(100);
+            expect(waiting && !extension().stateObj._bar, 'The extension-order reload did not suspend the bar');
+            manager.disableExtension(uuid);
+            await state(2);
+        } finally {
+            gate.onEnable = null;
+            resumed?.();
+        }
+        await state(2, trigger);
+        expect(!Main.panel.statusArea[uuid], 'A finished reload recreated the disabled bar');
+        await disabled({expect, activitiesWasVisible});
+        manager.disableExtension(gateId);
+        await state(2, gateId);
         manager.enableExtension(uuid);
         await state(1);
         await exercise(extension().stateObj, {wait, expect, phase: 'reenabled'});
