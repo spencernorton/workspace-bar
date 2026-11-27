@@ -49,17 +49,17 @@ class WorkspaceButton extends St.Button {
     }
 
     constructor() {
-        // A label of its own, not St.Button's `label`: St colours that one
-        // only when the button's style changes, which leaves a name set on a
-        // button already on screen black.
+        // Two stacked labels: base inactive theme label and active-colored
+        // overlay label, crossfaded purely via GPU opacity during pill flight
+        // so 120 Hz workspace switches trigger zero inline CSS re-parsing.
         const label = new St.Label();
+        const activeLabel = new St.Label({visible: false, opacity: 0});
+        const labelStack = new St.Widget({
+            layout_manager: new Clutter.BinLayout(),
+        });
+        labelStack.add_child(label);
+        labelStack.add_child(activeLabel);
 
-        // Separate the pill background from the label container inside a
-        // BinLayout with x_expand/y_expand so that:
-        //   1. At rest, _pillBg fills the exact same box as _labelBin.
-        //   2. During a workspace switch, the bar's pill flight moves one
-        //      button's _pillBg between the buttons' boxes, following the
-        //      desktop's progress, without moving or distorting any label.
         const pillStack = new St.Widget({
             layout_manager: new Clutter.BinLayout(),
             y_align: Clutter.ActorAlign.CENTER,
@@ -82,7 +82,7 @@ class WorkspaceButton extends St.Button {
             y_expand: true,
             x_align: Clutter.ActorAlign.FILL,
             y_align: Clutter.ActorAlign.FILL,
-            child: label,
+            child: labelStack,
         });
 
         pillStack.add_child(pillBg);
@@ -97,8 +97,12 @@ class WorkspaceButton extends St.Button {
         });
 
         this._label = label;
+        this._activeLabel = activeLabel;
         this._pillBg = pillBg;
         this._labelBin = labelBin;
+        this._appliedPillBgStyle = null;
+        this._appliedFgStyle = null;
+        this._baseOpacity = 255;
     }
 
     // This button's pill box in the bar's shared coordinates (the button's
@@ -115,7 +119,10 @@ class WorkspaceButton extends St.Button {
         const own = this.pillAllocation();
         if (!(own.width > 0) || !(rect.width > 0))
             return;
-        this._pillBg.style = pillBgStyle;
+        if (this._appliedPillBgStyle !== pillBgStyle) {
+            this._pillBg.style = pillBgStyle;
+            this._appliedPillBgStyle = pillBgStyle;
+        }
         this._pillBg.set_pivot_point(0.5, 0.5);
         this._pillBg.translation_x =
             (rect.x + rect.width * 0.5) - (own.x + own.width * 0.5);
@@ -130,57 +137,88 @@ class WorkspaceButton extends St.Button {
     }
 
     hidePill() {
-        if (this._pillBg.style !== null)
+        if (this._appliedPillBgStyle !== null) {
             this._pillBg.style = null;
+            this._appliedPillBgStyle = null;
+        }
         this.clearPillTransform();
     }
 
-    // The flight fades label colours through here, one style per frame.
-    setLabelColour(style) {
-        this._labelBin.style = style;
-    }
-
-    // The label's colour as the theme draws it, for the flight to fade
-    // from. Null when the theme cannot say (no node, no colour), in which
-    // case the flight falls back to switching colours at the halfway button.
-    readLabelColour() {
-        try {
-            const colour = this._label.get_theme_node().get_foreground_color();
-            return [Math.round(colour.red), Math.round(colour.green), Math.round(colour.blue)];
-        } catch (_) {
-            return null;
+    prepareFlightForeground(pillFgStyle) {
+        if (this._appliedFgStyle !== pillFgStyle) {
+            this._activeLabel.style = pillFgStyle;
+            this._appliedFgStyle = pillFgStyle;
         }
     }
 
+    // Pure GPU opacity crossfade between inactive and active label colours —
+    // zero CSS re-parsing per frame during 120 Hz workspace switches.
+    setActiveMix(closeness) {
+        if (closeness <= 0) {
+            if (this._activeLabel.visible)
+                this._activeLabel.visible = false;
+            this._activeLabel.opacity = 0;
+            this._label.opacity = this._baseOpacity;
+            return;
+        }
+        if (!this._activeLabel.visible)
+            this._activeLabel.visible = true;
+        if (closeness >= 1) {
+            this._activeLabel.opacity = 255;
+            this._label.opacity = 0;
+            return;
+        }
+        this._activeLabel.opacity = Math.round(255 * closeness);
+        this._label.opacity = Math.round(this._baseOpacity * (1 - closeness));
+    }
+
     sync(state, pillBgStyle, pillFgStyle, inFlight = false) {
-        this._label.text = state.label;
+        if (this._label.text !== state.label) {
+            this._label.text = state.label;
+            this._activeLabel.text = state.label;
+        }
         this.accessible_name = workspaceAccessibleName(state);
         this.visible = state.visible;
+        this._baseOpacity = state.empty ? EMPTY_OPACITY : 255;
 
-        // While a pill flight runs it owns the pill and label colours, frame
+        if (this._appliedFgStyle !== pillFgStyle) {
+            this._activeLabel.style = pillFgStyle;
+            this._appliedFgStyle = pillFgStyle;
+        }
+
+        // While a pill flight runs it owns the pill and label opacity, frame
         // by frame from the desktop's progress; it settles through a final
         // sync with the flight over. Everything else still updates.
         if (!inFlight) {
             this.clearPillTransform();
             if (state.active) {
-                this._pillBg.style = pillBgStyle;
-                this._labelBin.style = pillFgStyle;
+                if (this._appliedPillBgStyle !== pillBgStyle) {
+                    this._pillBg.style = pillBgStyle;
+                    this._appliedPillBgStyle = pillBgStyle;
+                }
+                this._activeLabel.visible = true;
+                this._activeLabel.opacity = 255;
+                this._label.remove_all_transitions();
+                this._label.opacity = 0;
             } else {
-                this._pillBg.style = null;
-                this._labelBin.style = null;
-            }
-        }
-
-        const targetOpacity = state.empty && !state.active ? EMPTY_OPACITY : 255;
-        if (this._label.opacity !== targetOpacity) {
-            if (this.is_mapped()) {
-                this._label.ease({
-                    opacity: targetOpacity,
-                    duration: WORKSPACE_ANIMATION_DURATION,
-                    mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-                });
-            } else {
-                this._label.opacity = targetOpacity;
+                if (this._appliedPillBgStyle !== null) {
+                    this._pillBg.style = null;
+                    this._appliedPillBgStyle = null;
+                }
+                this._activeLabel.visible = false;
+                this._activeLabel.opacity = 0;
+                const targetOpacity = this._baseOpacity;
+                if (this._label.opacity !== targetOpacity) {
+                    if (this.is_mapped()) {
+                        this._label.ease({
+                            opacity: targetOpacity,
+                            duration: WORKSPACE_ANIMATION_DURATION,
+                            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+                        });
+                    } else {
+                        this._label.opacity = targetOpacity;
+                    }
+                }
             }
         }
     }
@@ -204,8 +242,10 @@ class WorkspaceBar extends PanelMenu.Button {
             track_hover: false,
             accessible_role: Atk.Role.TOOL_BAR,
         });
+        this._wmSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.wm.preferences'});
+        this._mutterSettings = new Gio.Settings({schema_id: 'org.gnome.mutter'});
         this.add_style_class_name('workspace-bar');
-        this.setMenu(new WorkspacesMenu(this));
+        this.setMenu(new WorkspacesMenu(this, this._wmSettings));
 
         // The pill flight: while a switch runs, the desktop's progress drives
         // the pill between buttons (see setPillFraction). Null at rest.
@@ -221,8 +261,6 @@ class WorkspaceBar extends PanelMenu.Button {
         });
         this.add_child(this._box);
 
-        this._wmSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.wm.preferences'});
-        this._mutterSettings = new Gio.Settings({schema_id: 'org.gnome.mutter'});
         this._wmSettings.connectObject(
             'changed::workspace-names', () => this._sync(), this);
         this._mutterSettings.connectObject(
@@ -231,7 +269,6 @@ class WorkspaceBar extends PanelMenu.Button {
             'notify::n-workspaces', () => this._rebuild(),
             'workspace-switched', () => this._sync(),
             this);
-        global.display.connectObject('restacked', () => this._sync(), this);
         St.ThemeContext.get_for_stage(global.stage).connectObject(
             'changed', () => this._sync(), this);
 
@@ -326,25 +363,22 @@ class WorkspaceBar extends PanelMenu.Button {
 
         const [accent] = St.ThemeContext.get_for_stage(global.stage).get_accent_color();
         const {background, foreground} = accentPill(accent);
-        const activeIndex = global.workspace_manager.get_active_workspace_index();
-        const inactiveButton = buttons.find((_, index) => index !== activeIndex);
+        const pillBgStyle = `background-color: rgb(${background});`;
+        const pillFgStyle = `color: rgb(${foreground});`;
+        for (const button of buttons)
+            button.prepareFlightForeground(pillFgStyle);
 
         this._pillFlight = {
             rects,
-            background,
-            foreground,
-            inactive: inactiveButton?.readLabelColour() ?? null,
+            pillBgStyle,
         };
         return true;
     }
 
     // Put the pill at a fractional workspace index, as reported by the
     // desktop's own progress. The nearest button carries the pill at the
-    // interpolated rect; each label takes the colour for its closeness to
-    // the fraction, so highlight fades from one name into the next instead
-    // of flipping. Called with a new fraction mid-flight, it simply
-    // continues from wherever the pill was last drawn — a switch can be
-    // interrupted, reversed or retargeted without a jump.
+    // interpolated rect; each label crossfades its GPU opacity cleanly with
+    // zero CSS re-parsing per frame.
     setPillFraction(fraction) {
         if (!Number.isFinite(fraction))
             return;
@@ -361,25 +395,15 @@ class WorkspaceBar extends PanelMenu.Button {
         const rect = pillRectAt(flight.rects, fraction);
         const carrier = Math.min(buttons.length - 1,
             Math.max(0, Math.round(fraction)));
-        const pillBgStyle = `background-color: rgb(${flight.background});`;
 
         buttons.forEach((button, index) => {
             if (index === carrier)
-                button.showPillAt(rect, pillBgStyle);
+                button.showPillAt(rect, flight.pillBgStyle);
             else
                 button.hidePill();
 
-            if (flight.inactive) {
-                const closeness = Math.min(1,
-                    Math.max(0, 1 - Math.abs(fraction - index)));
-                button.setLabelColour(closeness <= 0
-                    ? null
-                    : `color: rgb(${mixColour(flight.inactive, flight.foreground, closeness)});`);
-            } else {
-                button.setLabelColour(index === carrier
-                    ? `color: rgb(${flight.foreground});`
-                    : null);
-            }
+            const closeness = Math.min(1, Math.max(0, 1 - Math.abs(fraction - index)));
+            button.setActiveMix(closeness);
         });
     }
 
@@ -434,89 +458,31 @@ function installWorkspaceAnimationHook(bar) {
     controller._workspaceBarOrig = orig;
 
     controller.animateSwitch = function (from, to, direction, onComplete) {
-        this._swipeTracker.enabled = false;
+        orig.animateSwitch.call(this, from, to, direction, onComplete);
 
-        let workspaceIndices = [];
-
-        switch (direction) {
-        case Meta.MotionDirection.UP:
-        case Meta.MotionDirection.LEFT:
-        case Meta.MotionDirection.UP_LEFT:
-        case Meta.MotionDirection.UP_RIGHT:
-            workspaceIndices = [to, from];
-            break;
-
-        case Meta.MotionDirection.DOWN:
-        case Meta.MotionDirection.RIGHT:
-        case Meta.MotionDirection.DOWN_LEFT:
-        case Meta.MotionDirection.DOWN_RIGHT:
-            workspaceIndices = [from, to];
-            break;
-        }
-
-        if (Clutter.get_default_text_direction() === Clutter.TextDirection.RTL &&
-            direction !== Meta.MotionDirection.UP &&
-            direction !== Meta.MotionDirection.DOWN)
-            workspaceIndices.reverse();
-
-        this._prepareWorkspaceSwitch(workspaceIndices);
         const switchData = this._switchData;
-        if (!switchData) {
-            this._swipeTracker.enabled = true;
-            onComplete();
+        if (!switchData?.monitors?.length)
             return;
-        }
-        switchData.inProgress = true;
-
-        const fromWs = global.workspace_manager.get_workspace_by_index(from);
-        const toWs = global.workspace_manager.get_workspace_by_index(to);
 
         const primaryGroup = switchData.monitors.find(
             m => m.index === Main.layoutManager.primaryIndex) ?? switchData.monitors[0];
+        const indices = (primaryGroup?._workspaceGroups ?? [])
+            .map(group => group.workspace.index());
+        if (primaryGroup && indices.length) {
+            try {
+                attachPillToMonitorGroup(bar, primaryGroup, indices);
+            } catch (err) {
+                console.error(`[workspace-bar] pill attach error: ${err}`);
+            }
+        }
 
         for (const monitorGroup of switchData.monitors) {
-            const fromProgress = monitorGroup.getWorkspaceProgress(fromWs);
-            const toProgress = monitorGroup.getWorkspaceProgress(toWs);
-            monitorGroup.progress = fromProgress;
-
-            if (monitorGroup === primaryGroup) {
-                try {
-                    attachPillToMonitorGroup(bar, monitorGroup, workspaceIndices);
-                } catch (err) {
-                    console.error(`[workspace-bar] pill attach error: ${err}`);
-                }
-            }
-
-            const params = {
-                duration: WORKSPACE_ANIMATION_DURATION,
-                mode: WORKSPACE_ANIMATION_MODE,
-            };
-
-            if (monitorGroup === primaryGroup) {
-                params.onComplete = () => {
-                    try {
-                        if (this._switchData === switchData)
-                            this._finishWorkspaceSwitch(switchData);
-                    } catch (e) {
-                        console.error(`[workspace-bar] finishWorkspaceSwitch error: ${e}`);
-                    }
-                    try {
-                        onComplete();
-                    } catch (e) {
-                        console.error(`[workspace-bar] onComplete error: ${e}`);
-                    }
-                    if (!this._switchData)
-                        this._swipeTracker.enabled = true;
-                };
-            }
-
-            monitorGroup.ease_property('progress', toProgress, params);
-            // With animations disabled, completion can destroy every monitor
-            // group before ease_property() returns.
-            if (this._switchData !== switchData)
-                return;
             const transition = monitorGroup.get_transition('progress');
-            transition?.set_cubic_bezier_progress(
+            if (!transition)
+                continue;
+            transition.set_duration(WORKSPACE_ANIMATION_DURATION);
+            transition.set_progress_mode(WORKSPACE_ANIMATION_MODE);
+            transition.set_cubic_bezier_progress(
                 WORKSPACE_BEZIER_P1,
                 WORKSPACE_BEZIER_P2,
             );

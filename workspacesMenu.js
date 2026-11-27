@@ -96,11 +96,9 @@ class EditableMenuItem extends PopupMenu.PopupBaseMenuItem {
             return Clutter.EVENT_STOP;
         });
 
-        global.stage.connectObject('notify::key-focus', () => {
-            const {keyFocus} = global.stage;
-            if (!keyFocus || !this.contains(keyFocus))
-                this._stopEditing();
-        }, this);
+        this.connect('destroy', () => {
+            global.stage.disconnectObject(this);
+        });
     }
 
     _switchActor(from, to) {
@@ -123,6 +121,11 @@ class EditableMenuItem extends PopupMenu.PopupBaseMenuItem {
 
     _startEditing() {
         this._editing = true;
+        global.stage.connectObject('notify::key-focus', () => {
+            const {keyFocus} = global.stage;
+            if (!keyFocus || !this.contains(keyFocus))
+                this._stopEditing();
+        }, this);
         this._switchActor(this.label, this._entry);
 
         this._entry.clutter_text.set_selection(0, -1);
@@ -136,6 +139,7 @@ class EditableMenuItem extends PopupMenu.PopupBaseMenuItem {
         if (!this._editing)
             return;
         this._editing = false;
+        global.stage.disconnectObject(this);
 
         if (this.label.text !== this._entry.text) {
             this.label.text = this._entry.text;
@@ -151,7 +155,7 @@ class EditableMenuItem extends PopupMenu.PopupBaseMenuItem {
 }
 
 export class WorkspacesMenu extends PopupMenu.PopupMenu {
-    constructor(sourceActor) {
+    constructor(sourceActor, desktopSettings = null) {
         super(sourceActor, 0.5, St.Side.TOP);
 
         this.actor.add_style_class_name('workspace-bar-menu');
@@ -168,17 +172,25 @@ export class WorkspacesMenu extends PopupMenu.PopupMenu {
 
         this.addMenuItem(this._workspacesSection);
 
-        this._desktopSettings =
+        this._desktopSettings = desktopSettings ??
             new Gio.Settings({schema_id: 'org.gnome.desktop.wm.preferences'});
-        this._desktopSettings.connectObject('changed::workspace-names',
-            () => this._updateWorkspaceLabels(), this.actor);
+        this._built = false;
 
-        const {workspaceManager} = global;
-        workspaceManager.connectObject(
-            'notify::n-workspaces', () => this._updateWorkspaceItems(),
-            'workspace-switched', () => this._updateActiveIndicator(),
-            this.actor);
-        this._updateWorkspaceItems();
+        this.connect('open-state-changed', (_menu, isOpen) => {
+            if (!isOpen)
+                return;
+            if (!this._built) {
+                this._built = true;
+                this._desktopSettings.connectObject('changed::workspace-names',
+                    () => this._updateWorkspaceLabels(), this.actor);
+                const {workspaceManager} = global;
+                workspaceManager.connectObject(
+                    'notify::n-workspaces', () => this._updateWorkspaceItems(),
+                    'workspace-switched', () => this._updateActiveIndicator(),
+                    this.actor);
+            }
+            this._updateWorkspaceItems();
+        });
     }
 
     _updateWorkspaceItems() {

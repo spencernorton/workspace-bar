@@ -88,6 +88,7 @@ class Actor extends Emitter {
     set_pivot_point(x, y) { this.pivot = [x, y]; }
     set_scale(x, y) { this.scale = [x, y]; }
     set_size(w, h) { this.width = w; this.height = h; }
+    remove_all_transitions() {}
     ease({onComplete, duration: _d, mode: _m, ...values}) { Object.assign(this, values); onComplete?.(); }
     grab_key_focus() { stage.grabFocus(this); }
     navigate_focus() { return false; }
@@ -170,16 +171,32 @@ class PanelButton extends Actor {
     destroy() { this.menu?.destroy(); super.destroy(); this.container.destroy(); }
 }
 
-class PopupMenu {
+class PopupMenu extends Emitter {
     constructor(sourceActor) {
+        super();
         Object.assign(this, {sourceActor, actor: new Actor(), box: new Actor(), isOpen: false});
         this.actor.add_child(this.box);
     }
     addMenuItem(item) { this.box.add_child(item.actor ?? item); }
-    open() { this.isOpen = true; }
-    close() { this.isOpen = false; }
-    toggle() { this.isOpen = !this.isOpen; }
-    destroy() { this.actor.destroy(); }
+    open() {
+        if (!this.isOpen) {
+            this.isOpen = true;
+            this.emit('open-state-changed', true);
+        }
+    }
+    close() {
+        if (this.isOpen) {
+            this.isOpen = false;
+            this.emit('open-state-changed', false);
+        }
+    }
+    toggle() {
+        if (this.isOpen)
+            this.close();
+        else
+            this.open();
+    }
+    destroy() { this.destroyed = true; this.actor.destroy(); }
 }
 
 class PopupMenuSection {
@@ -259,7 +276,16 @@ panel.addToStatusArea = (role, indicator, position, box) => {
     panel.statusArea[role] = indicator;
     indicator.connect('destroy', () => delete panel.statusArea[role]);
 };
-const origAnimateSwitch = () => {};
+const origAnimateSwitch = function (_from, _to, _direction, onComplete) {
+    this._prepareWorkspaceSwitch();
+    const monitor = this._switchData.monitors[0];
+    monitor.ease_property('progress', 1, {
+        onComplete: () => {
+            this._finishWorkspaceSwitch(this._switchData);
+            onComplete?.();
+        },
+    });
+};
 const origSwitchBegin = function () {
     this._prepareWorkspaceSwitch();
     this._switchData.baseMonitorGroup = this._switchData.monitors[0];
@@ -299,7 +325,11 @@ const wm = {
                 },
                 get_transition() {
                     assert.ok(!this.destroyed, 'read transition on a disposed monitor group');
-                    return {set_cubic_bezier_progress() {}};
+                    return {
+                        set_duration() {},
+                        set_progress_mode() {},
+                        set_cubic_bezier_progress() {},
+                    };
                 },
             });
             this._switchData = {monitors: [monitorGroup], inProgress: false};
@@ -386,12 +416,19 @@ const bar = () => panel.statusArea[uuid];
 const buttons = () => bar().get_children()[0].get_children();
 const menuItems = () => [...bar().menu.box.children[0].children[0]];
 const PURPLE_PILL = 'background-color: rgb(21,18,39);';
-// Each button holds the pill stack (pill background, then the label bin).
+// Each button holds the pill stack (pill background, then the label bin containing
+// the inactive base label and the active-colour overlay label).
 const pills = () => buttons().map(b => b.child.children[0]);
 const labelBins = () => buttons().map(b => b.child.children[1]);
-const labels = () => labelBins().map(p => p.child);
+const labels = () => labelBins().map(p => p.child.children[0]);
+const activeLabels = () => labelBins().map(p => p.child.children[1]);
 const names = () => labels().map(l => l.text);
-const colours = () => labels().map(l => l.colour);
+const colours = () => buttons().map((_b, i) => {
+    const active = activeLabels()[i];
+    if (active.visible && active.opacity > 0)
+        return active.style?.match(/(?:^|\s)color: (rgb\([^)]*\))/)?.[1] ?? active.colour;
+    return labels()[i].colour;
+});
 
 wmSettings.set_strv('workspace-names', ['Home', 'Code', 'Media']);
 
@@ -410,13 +447,19 @@ test('enable puts one button per workspace first in the top bar', () => {
     ]);
     assert.deepEqual(pills().map(p => p.style), [PURPLE_PILL, null, null, null]);
     assert.deepEqual(buttons().map(b => b.style), [null, null, null, null]);
-    // Only skip-taskbar windows count as empty; the active one is never dimmed.
-    // The name is dimmed, not the button with its focus ring.
-    assert.deepEqual(labels().map(l => l.opacity), [255, 255, 166, 166]);
+    // Only skip-taskbar windows count as empty; the active one shows the
+    // full-opacity active overlay label while inactive labels dim when empty.
+    assert.deepEqual(activeLabels().map(l => [l.visible, l.opacity]),
+        [[true, 255], [false, 0], [false, 0], [false, 0]]);
+    assert.deepEqual(labels().map(l => l.opacity), [0, 255, 166, 166]);
     assert.deepEqual(pills().map(p => p.opacity), [255, 255, 255, 255]);
     assert.deepEqual(buttons().map(b => b.opacity), [255, 255, 255, 255]);
+    // The menu stays empty until opened the first time (lazy population).
+    assert.equal(menuItems().length, 0);
+    bar().menu.open();
     assert.deepEqual(menuItems().map(item => item.label.text), ['Home', 'Code', 'Media', 'Workspace 4']);
     assert.deepEqual(menuItems().map(item => item.ornament), [2, 0, 0, 0]);
+    bar().menu.close();
 });
 
 test('the container takes no input and is not announced as a menu', () => {
@@ -441,7 +484,9 @@ test('a click switches workspace and the pill follows', () => {
     assert.equal(manager.active, 2);
     assert.equal(manager.workspaces[2].activatedAt, 1234);
     assert.deepEqual(pills().map(p => p.style), [null, null, PURPLE_PILL, null]);
-    assert.deepEqual(labels().map(l => l.opacity), [255, 255, 255, 166]);
+    assert.deepEqual(activeLabels().map(l => [l.visible, l.opacity]),
+        [[false, 0], [false, 0], [true, 255], [false, 0]]);
+    assert.deepEqual(labels().map(l => l.opacity), [255, 255, 0, 166]);
     assert.equal(pills()[2].translation_x, 0);
 });
 
@@ -553,14 +598,15 @@ test('the pill follows switch progress, fades the labels, and retargets without 
     buttons()[3].child.width = 0;
 
     // Half-way from workspace 1 to 2 the pill sits between the buttons,
-    // carried by the nearer one, and both names are half-faded. (The
-    // accent is still the teal from the accent test above.)
+    // carried by the nearer one, and both labels crossfade via GPU opacity.
     bar().setPillFraction(0.5);
     assert.deepEqual(pills().map(p => p.style),
         [null, 'background-color: rgb(9,23,23);', null, null]);
     assert.equal(pills()[1].translation_x, -35);
     assert.deepEqual(pills()[1].scale, [1, 1]);
-    assert.deepEqual(colours().slice(0, 2), ['rgb(185,209,209)', 'rgb(185,209,209)']);
+    assert.deepEqual(activeLabels().slice(0, 2).map(l => [l.visible, l.opacity]),
+        [[true, 128], [true, 128]]);
+    assert.deepEqual(labels().slice(0, 2).map(l => l.opacity), [128, 83]);
 
     // Retargeted on to workspace 3 mid-flight, it continues from the new
     // fraction: the carrier changes hands with no leftover pill behind.
