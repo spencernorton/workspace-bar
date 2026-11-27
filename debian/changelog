@@ -1,3 +1,13 @@
+gnome-shell-extension-workspace-bar (1.0.5) resolute; urgency=medium
+
+  * Crossfade active and inactive workspace labels using GPU opacity on
+    stacked labels instead of per-frame inline CSS updates.
+  * Delegate animateSwitch to GNOME Shell and retune its transition.
+  * Drop redundant restacked sync triggers, bind key-focus only while
+    editing, share wm.preferences settings, and build the menu lazily.
+
+ -- Norvi <apt@globalentry.systems>  Fri, 27 Nov 2026 21:15:00 +0000
+
 gnome-shell-extension-workspace-bar (1.0.4) resolute; urgency=medium
 
   * Restore the original Activities button safely across extension reloads.
