@@ -297,13 +297,17 @@ const wm = {
                     this.emit(`notify::${prop}`);
                     params.onComplete?.();
                 },
-                get_transition: () => ({set_cubic_bezier_progress() {}}),
+                get_transition() {
+                    assert.ok(!this.destroyed, 'read transition on a disposed monitor group');
+                    return {set_cubic_bezier_progress() {}};
+                },
             });
             this._switchData = {monitors: [monitorGroup], inProgress: false};
         },
     },
 };
 const layoutManager = {primaryIndex: 0};
+const shellExtension = {enabled: true};
 
 class Timeline {
     constructor(params = {}) { Object.assign(this, params); this.handlers = []; }
@@ -346,7 +350,7 @@ globalThis.__stubs = {
         ButtonMask: {ONE: 1}, DirectionType: {TAB_FORWARD: 0}, Side: {TOP: 0},
         ThemeContext: {get_for_stage: () => themeContext},
     },
-    'ui/main.js': {layoutManager, panel, wm},
+    'ui/main.js': {layoutManager, panel, wm, extensionManager: {lookup: () => shellExtension}},
     'ui/panelMenu.js': {Button: PanelButton},
     'ui/popupMenu.js': {Ornament: {NONE: 0, CHECK: 2}, PopupBaseMenuItem, PopupMenu, PopupMenuSection},
     'misc/animationUtils.js': {ensureActorVisibleInScrollView: () => {}},
@@ -632,4 +636,46 @@ test('enable and disable again, with Activities already hidden by someone else',
     extension.disable();
     assert.equal(panel.statusArea.activities.visible, false);
     panel.statusArea.activities.show();
+});
+
+test('repeated lifecycle calls own one bar and restore only the Activities actor they hid', () => {
+    const activities = panel.statusArea.activities;
+    extension.disable();
+    extension.enable();
+    const first = bar();
+    extension.enable();
+    assert.equal(bar(), first);
+    extension.disable();
+    activities.hide();
+    extension.disable();
+    assert.equal(activities.visible, false);
+
+    shellExtension.enabled = false;
+    extension.enable();
+    assert.equal(bar(), undefined);
+    shellExtension.enabled = true;
+    delete panel.statusArea.activities;
+    extension.enable();
+    extension.disable();
+    panel.statusArea.activities = activities;
+    activities.show();
+    extension.enable();
+    const replacement = new PanelButton(0, 'Replacement Activities');
+    replacement.hide();
+    panel.statusArea.activities = replacement;
+    extension.disable();
+    assert.equal(activities.visible, false);
+    assert.equal(replacement.visible, false);
+    panel.statusArea.activities = activities;
+    activities.show();
+    replacement.destroy();
+});
+
+test('disabling mid-gesture releases progress notifications from the old monitor group', () => {
+    extension.enable();
+    wm._workspaceAnimation._switchWorkspaceBegin({}, 0);
+    const monitor = wm._workspaceAnimation._switchData.monitors[0];
+    extension.disable();
+    assert.ok(!monitor.handlers.some(h => h.signal === 'notify::progress'));
+    wm._workspaceAnimation._finishWorkspaceSwitch(wm._workspaceAnimation._switchData);
 });

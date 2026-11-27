@@ -1,9 +1,7 @@
 import Gio from 'gi://Gio';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-let previousActivities;
 export async function exercise(extension, {wait, expect, phase}) {
-    previousActivities = extension._activitiesWasVisible;
     const mutter = new Gio.Settings({schema_id: 'org.gnome.mutter'});
     const wm = new Gio.Settings({schema_id: 'org.gnome.desktop.wm.preferences'});
     mutter.set_boolean('dynamic-workspaces', false);
@@ -12,6 +10,7 @@ export async function exercise(extension, {wait, expect, phase}) {
     await wait(300);
     const bar = Main.panel.statusArea[extension.uuid];
     expect(bar === extension._bar && bar.get_parent(), 'The workspace bar was not attached to the panel');
+    expect(!Main.panel.statusArea.activities?.visible, 'Activities remained visible beside the workspace bar');
     for (let i = 0; i < 50; i++) {
         const label = bar._box.get_children()[0]?._label.text;
         if (label === (phase === 'initial' ? 'Runtime One' : 'Runtime Again'))
@@ -29,6 +28,6 @@ export async function exercise(extension, {wait, expect, phase}) {
     expect(global.workspace_manager.get_active_workspace_index() === 0, 'Clicking the first workspace button did not switch back');
 }
 
-export async function disabled({expect}) {
-    expect(Main.panel.statusArea.activities.visible === previousActivities, 'Disabling did not restore Activities');
+export async function disabled({expect, activitiesWasVisible}) {
+    expect(Main.panel.statusArea.activities?.visible === activitiesWasVisible, 'Disabling did not restore Activities');
 }

@@ -2,6 +2,11 @@
 
 All notable changes to Workspace Bar are documented here.
 
+## 1.0.4 — 2026-11-27
+
+- Workspace Bar can be disabled and enabled repeatedly while GNOME reloads other extensions. It restores the Activities button only if it hid that same button.
+- Switching workspaces with animations disabled completes cleanly, including on multiple monitors.
+
 ## 1.0.3 — 2026-10-16
 
 - Workspace switching is one rigid 360 ms slide with a gentle ease-out, replacing the 195 ms whip-pan and its per-window speed-stretch: windows and wallpaper now travel together, undistorted, so the next workspace reads as already open beside the current one.

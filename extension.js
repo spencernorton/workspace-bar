@@ -393,16 +393,15 @@ class WorkspaceBar extends PanelMenu.Button {
     }
 }
 
-// Follow one monitor's switch progress with the pill. The connection
-// belongs to the monitor group, which GNOME destroys when the switch
-// finishes, so nothing outlives the animation.
+// The monitor group lives for one switch. The signal also disconnects if
+// the bar is removed from the panel while that switch is still running.
 function attachPillToMonitorGroup(bar, monitorGroup, workspaceIndices) {
     if (!monitorGroup || monitorGroup._workspaceBarPill)
         return;
     monitorGroup._workspaceBarPill = true;
-    monitorGroup.connect('notify::progress', group =>
+    monitorGroup.connectObject('notify::progress', group =>
         bar.setPillFraction(
-            fractionalWorkspaceIndex(workspaceIndices, group.progress)));
+            fractionalWorkspaceIndex(workspaceIndices, group.progress)), bar);
     bar.setPillFraction(
         fractionalWorkspaceIndex(workspaceIndices, monitorGroup.progress));
 }
@@ -461,20 +460,21 @@ function installWorkspaceAnimationHook(bar) {
             workspaceIndices.reverse();
 
         this._prepareWorkspaceSwitch(workspaceIndices);
-        if (!this._switchData) {
+        const switchData = this._switchData;
+        if (!switchData) {
             this._swipeTracker.enabled = true;
             onComplete();
             return;
         }
-        this._switchData.inProgress = true;
+        switchData.inProgress = true;
 
         const fromWs = global.workspace_manager.get_workspace_by_index(from);
         const toWs = global.workspace_manager.get_workspace_by_index(to);
 
-        const primaryGroup = this._switchData.monitors.find(
-            m => m.index === Main.layoutManager.primaryIndex) ?? this._switchData.monitors[0];
+        const primaryGroup = switchData.monitors.find(
+            m => m.index === Main.layoutManager.primaryIndex) ?? switchData.monitors[0];
 
-        for (const monitorGroup of this._switchData.monitors) {
+        for (const monitorGroup of switchData.monitors) {
             const fromProgress = monitorGroup.getWorkspaceProgress(fromWs);
             const toProgress = monitorGroup.getWorkspaceProgress(toWs);
             monitorGroup.progress = fromProgress;
@@ -495,8 +495,8 @@ function installWorkspaceAnimationHook(bar) {
             if (monitorGroup === primaryGroup) {
                 params.onComplete = () => {
                     try {
-                        if (this._switchData)
-                            this._finishWorkspaceSwitch(this._switchData);
+                        if (this._switchData === switchData)
+                            this._finishWorkspaceSwitch(switchData);
                     } catch (e) {
                         console.error(`[workspace-bar] finishWorkspaceSwitch error: ${e}`);
                     }
@@ -505,11 +505,16 @@ function installWorkspaceAnimationHook(bar) {
                     } catch (e) {
                         console.error(`[workspace-bar] onComplete error: ${e}`);
                     }
-                    this._swipeTracker.enabled = true;
+                    if (!this._switchData)
+                        this._swipeTracker.enabled = true;
                 };
             }
 
             monitorGroup.ease_property('progress', toProgress, params);
+            // With animations disabled, completion can destroy every monitor
+            // group before ease_property() returns.
+            if (this._switchData !== switchData)
+                return;
             const transition = monitorGroup.get_transition('progress');
             transition?.set_cubic_bezier_progress(
                 WORKSPACE_BEZIER_P1,
@@ -560,6 +565,9 @@ function installWorkspaceAnimationHook(bar) {
 
 export default class WorkspaceBarExtension extends Extension {
     enable() {
+        // A pending extension-order reload can resume after the user opted out.
+        if (this._bar || Main.extensionManager.lookup(this.uuid)?.enabled === false)
+            return;
         this._bar = new WorkspaceBar();
         Main.panel.addToStatusArea(this.uuid, this._bar, 0, 'left');
 
@@ -568,20 +576,22 @@ export default class WorkspaceBarExtension extends Extension {
         // The bar takes the place of the Activities button. Hide the button
         // itself, not its container: the panel shows every container again
         // on each session-mode change, such as unlocking the screen.
-        this._activities = Main.panel.statusArea.activities;
-        this._activitiesWasVisible = this._activities?.visible;
-        this._activities?.hide();
+        const activities = Main.panel.statusArea.activities;
+        this._hiddenActivities = activities?.visible ? activities : null;
+        this._hiddenActivities?.hide();
     }
 
     disable() {
-        this._restoreAnimationHook?.();
-        this._restoreAnimationHook = null;
-
-        if (this._activitiesWasVisible)
-            this._activities.show();
-        this._activities = null;
-
-        this._bar.destroy();
+        const bar = this._bar;
+        const restoreAnimationHook = this._restoreAnimationHook;
+        const activities = this._hiddenActivities;
         this._bar = null;
+        this._restoreAnimationHook = null;
+        this._hiddenActivities = null;
+
+        restoreAnimationHook?.();
+        if (activities && Main.panel.statusArea.activities === activities)
+            activities.show();
+        bar?.destroy();
     }
 }
