@@ -2,6 +2,12 @@
 
 All notable changes to Workspace Bar are documented here.
 
+## 1.0.5 — 2026-11-27
+
+- Crossfade active and inactive workspace labels via GPU opacity on stacked `St.Label` actors during workspace switches, eliminating per-frame CSS re-parsing.
+- Delegate `animateSwitch` to GNOME Shell's own implementation and retune only its duration and cubic-bezier progress curve.
+- Remove redundant `global.display::restacked` sync triggers, listen for stage key-focus only while editing a label, share `org.gnome.desktop.wm.preferences`, and build the workspaces menu lazily on first open.
+
 ## 1.0.4 — 2026-11-27
 
 - Workspace Bar can be disabled and enabled repeatedly while GNOME reloads other extensions. It restores the Activities button only if it hid that same button.
